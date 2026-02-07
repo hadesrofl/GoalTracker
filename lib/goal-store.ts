@@ -1,8 +1,9 @@
 import useSWR, { mutate } from "swr"
-import { goalRepository } from "./repository"
-import type { Goal } from "./types"
+import { goalRepository, categoryRepository } from "./repository"
+import type { Goal, Category, ExportData } from "./types"
 
 const GOALS_KEY = "goals"
+const CATEGORIES_KEY = "categories"
 
 export function useGoals() {
   const { data, error, isLoading } = useSWR(GOALS_KEY, () =>
@@ -11,6 +12,18 @@ export function useGoals() {
 
   return {
     goals: data ?? [],
+    isLoading,
+    error,
+  }
+}
+
+export function useCategories() {
+  const { data, error, isLoading } = useSWR(CATEGORIES_KEY, () =>
+    categoryRepository.getAll()
+  )
+
+  return {
+    categories: data ?? [],
     isLoading,
     error,
   }
@@ -31,11 +44,27 @@ export async function deleteGoal(id: string) {
   mutate(GOALS_KEY)
 }
 
-export async function importGoals(goals: Goal[]) {
-  await goalRepository.importGoals(goals)
-  mutate(GOALS_KEY)
+export async function createCategory(category: Category) {
+  await categoryRepository.create(category)
+  mutate(CATEGORIES_KEY)
 }
 
-export async function exportGoals(): Promise<Goal[]> {
-  return goalRepository.exportGoals()
+export async function updateCategory(category: Category) {
+  await categoryRepository.update(category)
+  mutate(CATEGORIES_KEY)
+}
+
+export async function deleteCategory(id: string) {
+  await categoryRepository.delete(id)
+  mutate(CATEGORIES_KEY)
+}
+
+export async function importData(data: ExportData) {
+  await goalRepository.importData(data)
+  mutate(GOALS_KEY)
+  mutate(CATEGORIES_KEY)
+}
+
+export async function exportData(): Promise<ExportData> {
+  return goalRepository.exportData()
 }

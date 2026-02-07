@@ -10,15 +10,16 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { exportGoals, importGoals } from "@/lib/goal-store"
+import { exportData, importData } from "@/lib/goal-store"
+import type { ExportData } from "@/lib/types"
 import { Download, Upload, FileJson } from "lucide-react"
 
 export function ImportExport() {
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const handleExport = async () => {
-    const goals = await exportGoals()
-    const json = JSON.stringify(goals, null, 2)
+    const data = await exportData()
+    const json = JSON.stringify(data, null, 2)
     const blob = new Blob([json], { type: "application/json" })
     const url = URL.createObjectURL(blob)
     const a = document.createElement("a")
@@ -43,11 +44,24 @@ export function ImportExport() {
     try {
       const text = await file.text()
       const data = JSON.parse(text)
-      if (!Array.isArray(data)) {
-        alert("Invalid file format. Expected an array of goals.")
+
+      // Support both old format (array of goals) and new format ({ goals, categories })
+      let importPayload: ExportData
+      if (Array.isArray(data)) {
+        importPayload = { goals: data, categories: [] }
+      } else if (data && Array.isArray(data.goals)) {
+        importPayload = {
+          goals: data.goals,
+          categories: Array.isArray(data.categories)
+            ? data.categories
+            : [],
+        }
+      } else {
+        alert("Invalid file format. Expected goals data.")
         return
       }
-      await importGoals(data)
+
+      await importData(importPayload)
     } catch {
       alert("Failed to import goals. Please check the file format.")
     }

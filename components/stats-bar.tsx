@@ -20,8 +20,10 @@ export function StatsBar({ goals }: StatsBarProps) {
             if (goal.milestones.length === 0) {
               return acc + (goal.status === "completed" ? 100 : 0)
             }
-            const done = goal.milestones.filter((m) => m.completed).length
-            return acc + Math.round((done / goal.milestones.length) * 100)
+            const active = goal.milestones.filter((m) => m.status !== "dropped")
+            if (active.length === 0) return acc
+            const done = active.filter((m) => m.status === "completed").length
+            return acc + Math.round((done / active.length) * 100)
           }, 0) / total
         )
 

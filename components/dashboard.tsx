@@ -1,12 +1,13 @@
 "use client"
 
 import { useState, useMemo } from "react"
-import { useGoals } from "@/lib/goal-store"
+import { useGoals, useCategories } from "@/lib/goal-store"
 import { GoalCard } from "@/components/goal-card"
 import { ProgressChart } from "@/components/progress-chart"
 import { GoalFormDialog } from "@/components/goal-form-dialog"
 import { GoalDetailDialog } from "@/components/goal-detail-dialog"
 import { ImportExport } from "@/components/import-export"
+import { CategoryManager } from "@/components/category-manager"
 import { StatsBar } from "@/components/stats-bar"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -18,20 +19,31 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import type { Goal } from "@/lib/types"
-import { DEFAULT_CATEGORIES } from "@/lib/types"
-import { Plus, Search, LayoutGrid, Target } from "lucide-react"
+import { Plus, Search, Target, Settings } from "lucide-react"
 
 export function Dashboard() {
   const { goals, isLoading } = useGoals()
+  const { categories } = useCategories()
 
   const [formOpen, setFormOpen] = useState(false)
   const [editGoal, setEditGoal] = useState<Goal | null>(null)
   const [detailGoal, setDetailGoal] = useState<Goal | null>(null)
   const [detailOpen, setDetailOpen] = useState(false)
+  const [categoryManagerOpen, setCategoryManagerOpen] = useState(false)
 
   const [search, setSearch] = useState("")
   const [categoryFilter, setCategoryFilter] = useState("all")
   const [statusFilter, setStatusFilter] = useState("all")
+  const [tagFilter, setTagFilter] = useState("all")
+
+  // Collect unique tags from all goals
+  const allTags = useMemo(() => {
+    const tags = new Set<string>()
+    for (const goal of goals) {
+      if (goal.tag) tags.add(goal.tag)
+    }
+    return Array.from(tags).sort()
+  }, [goals])
 
   const filteredGoals = useMemo(() => {
     return goals.filter((goal) => {
@@ -43,11 +55,13 @@ export function Dashboard() {
           goal.tag?.toLowerCase().includes(q)
         if (!matchesSearch) return false
       }
-      if (categoryFilter !== "all" && goal.category !== categoryFilter) return false
+      if (categoryFilter !== "all" && goal.category !== categoryFilter)
+        return false
       if (statusFilter !== "all" && goal.status !== statusFilter) return false
+      if (tagFilter !== "all" && goal.tag !== tagFilter) return false
       return true
     })
-  }, [goals, search, categoryFilter, statusFilter])
+  }, [goals, search, categoryFilter, statusFilter, tagFilter])
 
   const handleGoalClick = (goal: Goal) => {
     setDetailGoal(goal)
@@ -90,48 +104,73 @@ export function Dashboard() {
       <ProgressChart goals={goals} />
 
       {/* Toolbar */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search goals..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-9"
-          />
-        </div>
-        <div className="flex items-center gap-2">
-          <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-            <SelectTrigger className="w-40">
-              <SelectValue placeholder="Category" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Categories</SelectItem>
-              {DEFAULT_CATEGORIES.map((cat) => (
-                <SelectItem key={cat} value={cat}>
-                  {cat}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-36">
-              <SelectValue placeholder="Status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Statuses</SelectItem>
-              <SelectItem value="not-started">Not Started</SelectItem>
-              <SelectItem value="in-progress">In Progress</SelectItem>
-              <SelectItem value="completed">Completed</SelectItem>
-              <SelectItem value="abandoned">Abandoned</SelectItem>
-            </SelectContent>
-          </Select>
-          <ImportExport />
-          <Button onClick={handleNewGoal} size="sm">
-            <Plus className="mr-1.5 h-4 w-4" />
-            <span className="hidden sm:inline">New Goal</span>
-            <span className="sm:hidden">Add</span>
-          </Button>
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search goals..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-9"
+            />
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+              <SelectTrigger className="w-40">
+                <SelectValue placeholder="Category" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Categories</SelectItem>
+                {categories.map((cat) => (
+                  <SelectItem key={cat.id} value={cat.name}>
+                    {cat.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="w-36">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Statuses</SelectItem>
+                <SelectItem value="not-started">Not Started</SelectItem>
+                <SelectItem value="in-progress">In Progress</SelectItem>
+                <SelectItem value="completed">Completed</SelectItem>
+                <SelectItem value="abandoned">Abandoned</SelectItem>
+              </SelectContent>
+            </Select>
+            {allTags.length > 0 && (
+              <Select value={tagFilter} onValueChange={setTagFilter}>
+                <SelectTrigger className="w-32">
+                  <SelectValue placeholder="Tag" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Tags</SelectItem>
+                  {allTags.map((t) => (
+                    <SelectItem key={t} value={t}>
+                      {t}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+            <ImportExport />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCategoryManagerOpen(true)}
+              aria-label="Manage categories"
+            >
+              <Settings className="h-3.5 w-3.5" />
+            </Button>
+            <Button onClick={handleNewGoal} size="sm">
+              <Plus className="mr-1.5 h-4 w-4" />
+              <span className="hidden sm:inline">New Goal</span>
+              <span className="sm:hidden">Add</span>
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -166,7 +205,6 @@ export function Dashboard() {
 
       {/* Dialogs */}
       <GoalFormDialog
-        key={editGoal?.id ?? "new"}
         open={formOpen}
         onOpenChange={setFormOpen}
         editGoal={editGoal}
@@ -176,6 +214,10 @@ export function Dashboard() {
         open={detailOpen}
         onOpenChange={setDetailOpen}
         onEdit={handleEditFromDetail}
+      />
+      <CategoryManager
+        open={categoryManagerOpen}
+        onOpenChange={setCategoryManagerOpen}
       />
     </div>
   )

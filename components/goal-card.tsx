@@ -16,8 +16,10 @@ function getProgress(goal: Goal): number {
   if (goal.milestones.length === 0) {
     return goal.status === "completed" ? 100 : 0
   }
-  const completed = goal.milestones.filter((m) => m.completed).length
-  return Math.round((completed / goal.milestones.length) * 100)
+  const active = goal.milestones.filter((m) => m.status !== "dropped")
+  if (active.length === 0) return 0
+  const completed = active.filter((m) => m.status === "completed").length
+  return Math.round((completed / active.length) * 100)
 }
 
 function getDaysRemaining(endDate: string): number {
@@ -123,8 +125,8 @@ export function GoalCard({ goal, onClick }: GoalCardProps) {
           <div className="mb-3">
             <div className="flex items-center justify-between mb-1.5">
               <span className="text-xs text-muted-foreground">
-                {goal.milestones.filter((m) => m.completed).length} of{" "}
-                {goal.milestones.length} milestones
+                {goal.milestones.filter((m) => m.status === "completed").length} of{" "}
+                {goal.milestones.filter((m) => m.status !== "dropped").length} milestones
               </span>
               <span className="text-xs font-medium text-card-foreground">{progress}%</span>
             </div>

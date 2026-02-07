@@ -1,4 +1,5 @@
-import type { Goal } from "./types"
+import type { Goal, Category, ExportData } from "./types"
+import { INITIAL_CATEGORIES } from "./types"
 
 export interface GoalRepository {
   getAll(): Promise<Goal[]>
@@ -6,64 +7,93 @@ export interface GoalRepository {
   create(goal: Goal): Promise<Goal>
   update(goal: Goal): Promise<Goal>
   delete(id: string): Promise<void>
-  importGoals(goals: Goal[]): Promise<void>
-  exportGoals(): Promise<Goal[]>
+  importData(data: ExportData): Promise<void>
+  exportData(): Promise<ExportData>
 }
 
-const STORAGE_KEY = "goal-tracker-goals"
+export interface CategoryRepository {
+  getAll(): Promise<Category[]>
+  create(category: Category): Promise<Category>
+  update(category: Category): Promise<Category>
+  delete(id: string): Promise<void>
+  setAll(categories: Category[]): Promise<void>
+}
 
-function readFromStorage(): Goal[] {
+const GOALS_KEY = "goal-tracker-goals"
+const CATEGORIES_KEY = "goal-tracker-categories"
+
+function readGoalsFromStorage(): Goal[] {
   if (typeof window === "undefined") return []
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
+    const raw = localStorage.getItem(GOALS_KEY)
     return raw ? JSON.parse(raw) : []
   } catch {
     return []
   }
 }
 
-function writeToStorage(goals: Goal[]): void {
+function writeGoalsToStorage(goals: Goal[]): void {
   if (typeof window === "undefined") return
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(goals))
+  localStorage.setItem(GOALS_KEY, JSON.stringify(goals))
+}
+
+function readCategoriesFromStorage(): Category[] {
+  if (typeof window === "undefined") return INITIAL_CATEGORIES
+  try {
+    const raw = localStorage.getItem(CATEGORIES_KEY)
+    if (!raw) return INITIAL_CATEGORIES
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) && parsed.length > 0
+      ? parsed
+      : INITIAL_CATEGORIES
+  } catch {
+    return INITIAL_CATEGORIES
+  }
+}
+
+function writeCategoriesToStorage(categories: Category[]): void {
+  if (typeof window === "undefined") return
+  localStorage.setItem(CATEGORIES_KEY, JSON.stringify(categories))
 }
 
 export class LocalStorageGoalRepository implements GoalRepository {
   async getAll(): Promise<Goal[]> {
-    return readFromStorage()
+    return readGoalsFromStorage()
   }
 
   async getById(id: string): Promise<Goal | null> {
-    const goals = readFromStorage()
+    const goals = readGoalsFromStorage()
     return goals.find((g) => g.id === id) ?? null
   }
 
   async create(goal: Goal): Promise<Goal> {
-    const goals = readFromStorage()
+    const goals = readGoalsFromStorage()
     goals.push(goal)
-    writeToStorage(goals)
+    writeGoalsToStorage(goals)
     return goal
   }
 
   async update(goal: Goal): Promise<Goal> {
-    const goals = readFromStorage()
+    const goals = readGoalsFromStorage()
     const index = goals.findIndex((g) => g.id === goal.id)
     if (index !== -1) {
       goals[index] = goal
-      writeToStorage(goals)
+      writeGoalsToStorage(goals)
     }
     return goal
   }
 
   async delete(id: string): Promise<void> {
-    const goals = readFromStorage()
-    writeToStorage(goals.filter((g) => g.id !== id))
+    const goals = readGoalsFromStorage()
+    writeGoalsToStorage(goals.filter((g) => g.id !== id))
   }
 
-  async importGoals(imported: Goal[]): Promise<void> {
-    const existing = readFromStorage()
+  async importData(data: ExportData): Promise<void> {
+    // Merge goals
+    const existing = readGoalsFromStorage()
     const existingIds = new Set(existing.map((g) => g.id))
     const merged = [...existing]
-    for (const goal of imported) {
+    for (const goal of data.goals) {
       if (existingIds.has(goal.id)) {
         const idx = merged.findIndex((g) => g.id === goal.id)
         if (idx !== -1) merged[idx] = goal
@@ -71,12 +101,62 @@ export class LocalStorageGoalRepository implements GoalRepository {
         merged.push(goal)
       }
     }
-    writeToStorage(merged)
+    writeGoalsToStorage(merged)
+
+    // Merge categories
+    if (data.categories && data.categories.length > 0) {
+      const existingCats = readCategoriesFromStorage()
+      const existingCatIds = new Set(existingCats.map((c) => c.id))
+      const mergedCats = [...existingCats]
+      for (const cat of data.categories) {
+        if (!existingCatIds.has(cat.id)) {
+          mergedCats.push(cat)
+        }
+      }
+      writeCategoriesToStorage(mergedCats)
+    }
   }
 
-  async exportGoals(): Promise<Goal[]> {
-    return readFromStorage()
+  async exportData(): Promise<ExportData> {
+    return {
+      goals: readGoalsFromStorage(),
+      categories: readCategoriesFromStorage(),
+    }
+  }
+}
+
+export class LocalStorageCategoryRepository implements CategoryRepository {
+  async getAll(): Promise<Category[]> {
+    return readCategoriesFromStorage()
+  }
+
+  async create(category: Category): Promise<Category> {
+    const categories = readCategoriesFromStorage()
+    categories.push(category)
+    writeCategoriesToStorage(categories)
+    return category
+  }
+
+  async update(category: Category): Promise<Category> {
+    const categories = readCategoriesFromStorage()
+    const index = categories.findIndex((c) => c.id === category.id)
+    if (index !== -1) {
+      categories[index] = category
+      writeCategoriesToStorage(categories)
+    }
+    return category
+  }
+
+  async delete(id: string): Promise<void> {
+    const categories = readCategoriesFromStorage()
+    writeCategoriesToStorage(categories.filter((c) => c.id !== id))
+  }
+
+  async setAll(categories: Category[]): Promise<void> {
+    writeCategoriesToStorage(categories)
   }
 }
 
 export const goalRepository: GoalRepository = new LocalStorageGoalRepository()
+export const categoryRepository: CategoryRepository =
+  new LocalStorageCategoryRepository()
