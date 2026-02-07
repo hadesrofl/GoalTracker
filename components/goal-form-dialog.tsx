@@ -22,7 +22,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import type { Goal, Milestone, MilestoneStatus } from "@/lib/types"
-import { GOAL_TEMPLATES, generateId, deriveGoalStatus } from "@/lib/types"
+import { GOAL_TEMPLATES, generateId, deriveGoalStatus, propagateMilestoneStatuses } from "@/lib/types"
 import { createGoal, updateGoal, useCategories } from "@/lib/goal-store"
 import { MilestoneFormDialog } from "@/components/milestone-form-dialog"
 import {

@@ -20,7 +20,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import type { Goal, GoalStatus, Milestone, MilestoneStatus } from "@/lib/types"
-import { GOAL_TEMPLATES, deriveGoalStatus } from "@/lib/types"
+import { GOAL_TEMPLATES, deriveGoalStatus, propagateMilestoneStatuses } from "@/lib/types"
 import { updateGoal, deleteGoal, useCategories } from "@/lib/goal-store"
 import { MilestoneFormDialog } from "@/components/milestone-form-dialog"
 import {
@@ -134,7 +134,7 @@ export function GoalDetailDialog({
 
   // Milestone CRUD within the detail view
   const handleSaveMilestone = async (milestone: Milestone) => {
-    const updatedMilestones = [...goal.milestones]
+    let updatedMilestones = [...goal.milestones]
     const existingIdx = updatedMilestones.findIndex(
       (m) => m.id === milestone.id
     )
@@ -143,6 +143,12 @@ export function GoalDetailDialog({
     } else {
       updatedMilestones.push(milestone)
     }
+
+    // Propagate status upward through parent chain
+    updatedMilestones = propagateMilestoneStatuses(
+      updatedMilestones,
+      milestone.id
+    )
 
     const newStatus = deriveGoalStatus(updatedMilestones)
 
@@ -178,7 +184,7 @@ export function GoalDetailDialog({
     milestoneId: string,
     newStatus: MilestoneStatus
   ) => {
-    const updatedMilestones = goal.milestones.map((m) =>
+    let updatedMilestones = goal.milestones.map((m) =>
       m.id === milestoneId
         ? {
             ...m,
@@ -189,6 +195,12 @@ export function GoalDetailDialog({
                 : undefined,
           }
         : m
+    )
+
+    // Propagate status upward through parent chain
+    updatedMilestones = propagateMilestoneStatuses(
+      updatedMilestones,
+      milestoneId
     )
 
     const goalStatus = deriveGoalStatus(updatedMilestones)

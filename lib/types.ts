@@ -151,7 +151,83 @@ export function generateId(): string {
 }
 
 /**
- * Derive goal status from its milestones.
+ * Derive a parent milestone's status from its direct children.
+ * - No children → returns null (keep own status)
+ * - All children dropped → "dropped"
+ * - All active (non-dropped) children completed → "completed"
+ * - Any child in-progress or completed → "in-progress"
+ * - Otherwise → "not-started"
+ */
+export function deriveMilestoneStatus(
+  parentId: string,
+  allMilestones: Milestone[]
+): MilestoneStatus | null {
+  const children = allMilestones.filter(
+    (m) => m.parentMilestoneId === parentId
+  )
+  if (children.length === 0) return null
+
+  if (children.every((m) => m.status === "dropped")) return "dropped"
+
+  const active = children.filter((m) => m.status !== "dropped")
+  if (active.length > 0 && active.every((m) => m.status === "completed")) {
+    return "completed"
+  }
+
+  if (
+    children.some(
+      (m) => m.status === "in-progress" || m.status === "completed"
+    )
+  ) {
+    return "in-progress"
+  }
+
+  return "not-started"
+}
+
+/**
+ * After a milestone's status changes, propagate status upward through
+ * the parent chain. Returns a new milestones array with updated parents.
+ */
+export function propagateMilestoneStatuses(
+  milestones: Milestone[],
+  changedId: string
+): Milestone[] {
+  let result = [...milestones]
+  let currentId: string | undefined = changedId
+
+  while (currentId) {
+    const current = result.find((m) => m.id === currentId)
+    if (!current?.parentMilestoneId) break
+
+    const parentId = current.parentMilestoneId
+    const derived = deriveMilestoneStatus(parentId, result)
+
+    if (derived !== null) {
+      result = result.map((m) =>
+        m.id === parentId
+          ? {
+              ...m,
+              status: derived,
+              completedAt:
+                derived === "completed"
+                  ? m.completedAt ?? new Date().toISOString()
+                  : m.status === "completed" && derived !== "completed"
+                    ? undefined
+                    : m.completedAt,
+            }
+          : m
+      )
+    }
+
+    currentId = parentId
+  }
+
+  return result
+}
+
+/**
+ * Derive goal status from its top-level milestones.
  * - All dropped → abandoned
  * - All active (non-dropped) completed → completed
  * - Any in-progress or completed → in-progress
