@@ -20,8 +20,8 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import type { Goal, GoalStatus, Milestone, MilestoneStatus } from "@/lib/types"
-import { GOAL_TEMPLATES } from "@/lib/types"
-import { updateGoal, deleteGoal } from "@/lib/goal-store"
+import { GOAL_TEMPLATES, deriveGoalStatus } from "@/lib/types"
+import { updateGoal, deleteGoal, useCategories } from "@/lib/goal-store"
 import { MilestoneFormDialog } from "@/components/milestone-form-dialog"
 import {
   Calendar,
@@ -93,6 +93,7 @@ export function GoalDetailDialog({
   onOpenChange,
   onEdit,
 }: GoalDetailDialogProps) {
+  const { categories } = useCategories()
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [milestoneFormOpen, setMilestoneFormOpen] = useState(false)
   const [editingMilestone, setEditingMilestone] = useState<Milestone | null>(
@@ -143,21 +144,7 @@ export function GoalDetailDialog({
       updatedMilestones.push(milestone)
     }
 
-    // Derive goal status from milestones
-    const active = updatedMilestones.filter((m) => m.status !== "dropped")
-    const completedCount = active.filter(
-      (m) => m.status === "completed"
-    ).length
-    let newStatus: GoalStatus = goal.status
-    if (active.length > 0 && completedCount === active.length) {
-      newStatus = "completed"
-    } else if (
-      updatedMilestones.some(
-        (m) => m.status === "in-progress" || m.status === "completed"
-      )
-    ) {
-      newStatus = "in-progress"
-    }
+    const newStatus = deriveGoalStatus(updatedMilestones)
 
     await updateGoal({
       ...goal,
@@ -204,22 +191,7 @@ export function GoalDetailDialog({
         : m
     )
 
-    const active = updatedMilestones.filter((m) => m.status !== "dropped")
-    const completedCount = active.filter(
-      (m) => m.status === "completed"
-    ).length
-    let goalStatus: GoalStatus = goal.status
-    if (active.length > 0 && completedCount === active.length) {
-      goalStatus = "completed"
-    } else if (
-      updatedMilestones.some(
-        (m) => m.status === "in-progress" || m.status === "completed"
-      )
-    ) {
-      goalStatus = "in-progress"
-    } else if (updatedMilestones.every((m) => m.status === "not-started")) {
-      goalStatus = "not-started"
-    }
+    const goalStatus = deriveGoalStatus(updatedMilestones)
 
     await updateGoal({
       ...goal,
@@ -368,14 +340,32 @@ export function GoalDetailDialog({
               </div>
             </div>
             <div className="flex flex-wrap gap-1.5 mt-2">
-              {goal.category && (
-                <Badge variant="secondary">{goal.category}</Badge>
-              )}
-              {goal.tag && (
-                <Badge variant="outline" className="bg-transparent">
-                  {goal.tag}
+              {goal.category && (() => {
+                const catObj = categories.find((c) => c.name === goal.category)
+                return (
+                  <Badge
+                    variant="secondary"
+                    style={
+                      catObj
+                        ? { backgroundColor: `${catObj.color}20`, color: catObj.color, borderColor: `${catObj.color}40` }
+                        : undefined
+                    }
+                  >
+                    {catObj && (
+                      <span
+                        className="mr-1 h-2 w-2 rounded-full inline-block"
+                        style={{ backgroundColor: catObj.color }}
+                      />
+                    )}
+                    {goal.category}
+                  </Badge>
+                )
+              })()}
+              {goal.tags.map((tag) => (
+                <Badge key={tag} variant="outline" className="bg-transparent">
+                  {tag}
                 </Badge>
-              )}
+              ))}
               {goal.template && goal.template !== "free" && (
                 <Badge
                   variant="outline"

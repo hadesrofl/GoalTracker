@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, type KeyboardEvent } from "react"
 import {
   Dialog,
   DialogContent,
@@ -22,10 +22,18 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import type { Goal, Milestone, MilestoneStatus } from "@/lib/types"
-import { GOAL_TEMPLATES, generateId } from "@/lib/types"
+import { GOAL_TEMPLATES, generateId, deriveGoalStatus } from "@/lib/types"
 import { createGoal, updateGoal, useCategories } from "@/lib/goal-store"
 import { MilestoneFormDialog } from "@/components/milestone-form-dialog"
-import { Plus, Pencil, Trash2, ChevronRight } from "lucide-react"
+import {
+  Plus,
+  Pencil,
+  Trash2,
+  ChevronRight,
+  X,
+  Circle,
+  CheckCircle2,
+} from "lucide-react"
 
 interface GoalFormDialogProps {
   open: boolean
@@ -59,7 +67,8 @@ export function GoalFormDialog({
   const [title, setTitle] = useState("")
   const [description, setDescription] = useState("")
   const [category, setCategory] = useState("")
-  const [tag, setTag] = useState("")
+  const [tags, setTags] = useState<string[]>([])
+  const [tagInput, setTagInput] = useState("")
   const [endDate, setEndDate] = useState("")
   const [template, setTemplate] = useState("free")
   const [templateSections, setTemplateSections] = useState<
@@ -79,7 +88,8 @@ export function GoalFormDialog({
       if (editGoal) {
         setTitle(editGoal.title)
         setCategory(editGoal.category ?? "")
-        setTag(editGoal.tag ?? "")
+        setTags(editGoal.tags ?? [])
+        setTagInput("")
         setEndDate(
           editGoal.endDate
             ? new Date(editGoal.endDate).toISOString().split("T")[0]
@@ -101,11 +111,11 @@ export function GoalFormDialog({
           setTemplateSections({})
         }
       } else {
-        // Reset for new goal
         setTitle("")
         setDescription("")
         setCategory("")
-        setTag("")
+        setTags([])
+        setTagInput("")
         setEndDate("")
         setTemplate("free")
         setTemplateSections({})
@@ -116,6 +126,25 @@ export function GoalFormDialog({
 
   const handleOpenChange = (value: boolean) => {
     onOpenChange(value)
+  }
+
+  // Tag input handlers
+  const handleTagKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      e.preventDefault()
+      const trimmed = tagInput.trim()
+      if (trimmed && !tags.includes(trimmed)) {
+        setTags([...tags, trimmed])
+      }
+      setTagInput("")
+    }
+    if (e.key === "Backspace" && tagInput === "" && tags.length > 0) {
+      setTags(tags.slice(0, -1))
+    }
+  }
+
+  const removeTag = (tagToRemove: string) => {
+    setTags(tags.filter((t) => t !== tagToRemove))
   }
 
   const handleSaveMilestone = (milestone: Milestone) => {
@@ -148,6 +177,24 @@ export function GoalFormDialog({
     )
   }
 
+  const handleToggleMilestoneComplete = (id: string) => {
+    setMilestones((prev) =>
+      prev.map((m) => {
+        if (m.id !== id) return m
+        const newStatus: MilestoneStatus =
+          m.status === "completed" ? "not-started" : "completed"
+        return {
+          ...m,
+          status: newStatus,
+          completedAt:
+            newStatus === "completed"
+              ? new Date().toISOString()
+              : undefined,
+        }
+      })
+    )
+  }
+
   const handleAddMilestone = () => {
     setEditingMilestone(null)
     setMilestoneFormOpen(true)
@@ -161,40 +208,26 @@ export function GoalFormDialog({
   const handleSubmit = async () => {
     if (!title.trim() || !endDate) return
 
+    const derivedStatus = deriveGoalStatus(milestones)
+
     const goalData: Goal = {
       id: editGoal?.id ?? generateId(),
       title: title.trim(),
       description: buildDescription(),
       category: category || undefined,
-      tag: tag || undefined,
+      tags,
       endDate: new Date(endDate).toISOString(),
-      status: editGoal?.status ?? "not-started",
+      status:
+        milestones.length > 0
+          ? derivedStatus
+          : editGoal?.status ?? "not-started",
       milestones,
       template,
       createdAt: editGoal?.createdAt ?? new Date().toISOString(),
-      completedAt: editGoal?.completedAt,
-    }
-
-    // Auto-derive status from milestones
-    if (milestones.length > 0) {
-      const completed = milestones.filter(
-        (m) => m.status === "completed"
-      ).length
-      const active = milestones.filter(
-        (m) => m.status !== "dropped"
-      ).length
-      if (completed === active && active > 0) {
-        goalData.status = "completed"
-        goalData.completedAt =
-          goalData.completedAt ?? new Date().toISOString()
-      } else if (
-        milestones.some(
-          (m) =>
-            m.status === "in-progress" || m.status === "completed"
-        )
-      ) {
-        goalData.status = "in-progress"
-      }
+      completedAt:
+        derivedStatus === "completed"
+          ? editGoal?.completedAt ?? new Date().toISOString()
+          : undefined,
     }
 
     if (isEdit) {
@@ -298,7 +331,7 @@ export function GoalFormDialog({
               ))
             )}
 
-            {/* Category and Tag */}
+            {/* Category and Tags */}
             <div className="grid grid-cols-2 gap-4">
               <div className="grid gap-1.5">
                 <Label>Category</Label>
@@ -309,20 +342,47 @@ export function GoalFormDialog({
                   <SelectContent>
                     {categories.map((cat) => (
                       <SelectItem key={cat.id} value={cat.name}>
-                        {cat.name}
+                        <span className="flex items-center gap-2">
+                          <span
+                            className="h-2.5 w-2.5 rounded-full"
+                            style={{ backgroundColor: cat.color }}
+                          />
+                          {cat.name}
+                        </span>
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
               <div className="grid gap-1.5">
-                <Label htmlFor="goal-tag">Tag</Label>
-                <Input
-                  id="goal-tag"
-                  placeholder="e.g., Q1, Personal"
-                  value={tag}
-                  onChange={(e) => setTag(e.target.value)}
-                />
+                <Label htmlFor="goal-tag">Tags</Label>
+                <div className="flex flex-wrap items-center gap-1.5 rounded-md border border-input bg-transparent px-2 py-1.5 min-h-9">
+                  {tags.map((tag) => (
+                    <Badge
+                      key={tag}
+                      variant="secondary"
+                      className="text-xs gap-1 pr-1"
+                    >
+                      {tag}
+                      <button
+                        type="button"
+                        onClick={() => removeTag(tag)}
+                        className="ml-0.5 rounded-full hover:bg-muted-foreground/20 p-0.5"
+                        aria-label={`Remove tag ${tag}`}
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </Badge>
+                  ))}
+                  <Input
+                    id="goal-tag"
+                    placeholder={tags.length === 0 ? "Type and press Enter" : "Add more..."}
+                    value={tagInput}
+                    onChange={(e) => setTagInput(e.target.value)}
+                    onKeyDown={handleTagKeyDown}
+                    className="flex-1 min-w-20 border-0 p-0 h-6 focus-visible:ring-0 shadow-none"
+                  />
+                </div>
               </div>
             </div>
 
@@ -353,7 +413,7 @@ export function GoalFormDialog({
               </div>
               {milestones.length > 0 ? (
                 <div className="space-y-1.5">
-                  {milestones.map((m, index) => {
+                  {milestones.map((m) => {
                     const parent = m.parentMilestoneId
                       ? milestones.find(
                           (p) => p.id === m.parentMilestoneId
@@ -364,12 +424,29 @@ export function GoalFormDialog({
                         key={m.id}
                         className="flex items-center gap-2 px-3 py-2 rounded-md bg-secondary"
                       >
-                        <span className="text-xs text-muted-foreground font-mono w-5">
-                          {index + 1}.
-                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleToggleMilestoneComplete(m.id)}
+                          className="shrink-0 transition-colors"
+                          aria-label={
+                            m.status === "completed"
+                              ? `Mark "${m.title}" incomplete`
+                              : `Mark "${m.title}" complete`
+                          }
+                        >
+                          {m.status === "completed" ? (
+                            <CheckCircle2 className="h-4.5 w-4.5 text-primary" />
+                          ) : (
+                            <Circle className="h-4.5 w-4.5 text-muted-foreground hover:text-primary" />
+                          )}
+                        </button>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
-                            <span className="text-sm text-secondary-foreground truncate">
+                            <span
+                              className={`text-sm text-secondary-foreground truncate ${
+                                m.status === "completed" ? "line-through text-muted-foreground" : ""
+                              }`}
+                            >
                               {m.title}
                             </span>
                             <Badge

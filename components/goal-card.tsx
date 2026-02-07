@@ -3,12 +3,13 @@
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
-import type { Goal } from "@/lib/types"
-import { Calendar, Target, CheckCircle2, AlertCircle, Clock } from "lucide-react"
+import type { Goal, Category, GoalStatus } from "@/lib/types"
+import { Calendar, Target, CheckCircle2, AlertCircle, Clock, Ban } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 interface GoalCardProps {
   goal: Goal
+  categories: Category[]
   onClick: (goal: Goal) => void
 }
 
@@ -28,23 +29,32 @@ function getDaysRemaining(endDate: string): number {
   return Math.ceil((end.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
 }
 
-function getStatusConfig(goal: Goal) {
-  const daysLeft = getDaysRemaining(goal.endDate)
+const STATUS_CONFIG: Record<GoalStatus, { icon: typeof Target; label: string; className: string }> = {
+  "not-started": {
+    icon: Target,
+    label: "Not Started",
+    className: "bg-secondary text-secondary-foreground border-secondary",
+  },
+  "in-progress": {
+    icon: Clock,
+    label: "In Progress",
+    className: "bg-[hsl(var(--chart-3))]/10 text-[hsl(var(--chart-3))] border-[hsl(var(--chart-3))]/20",
+  },
+  completed: {
+    icon: CheckCircle2,
+    label: "Completed",
+    className: "bg-primary/10 text-primary border-primary/20",
+  },
+  abandoned: {
+    icon: Ban,
+    label: "Abandoned",
+    className: "bg-muted text-muted-foreground border-muted",
+  },
+}
 
-  if (goal.status === "completed") {
-    return {
-      icon: CheckCircle2,
-      label: "Completed",
-      className: "bg-primary/10 text-primary border-primary/20",
-    }
-  }
-  if (goal.status === "abandoned") {
-    return {
-      icon: AlertCircle,
-      label: "Abandoned",
-      className: "bg-muted text-muted-foreground border-muted",
-    }
-  }
+function getUrgencyBadge(goal: Goal) {
+  if (goal.status === "completed" || goal.status === "abandoned") return null
+  const daysLeft = getDaysRemaining(goal.endDate)
   if (daysLeft < 0) {
     return {
       icon: AlertCircle,
@@ -59,18 +69,19 @@ function getStatusConfig(goal: Goal) {
       className: "bg-[hsl(var(--warning))]/10 text-[hsl(var(--warning))] border-[hsl(var(--warning))]/20",
     }
   }
-  return {
-    icon: Target,
-    label: `${daysLeft}d left`,
-    className: "bg-secondary text-secondary-foreground border-secondary",
-  }
+  return null
 }
 
-export function GoalCard({ goal, onClick }: GoalCardProps) {
+export function GoalCard({ goal, categories, onClick }: GoalCardProps) {
   const progress = getProgress(goal)
-  const statusConfig = getStatusConfig(goal)
+  const statusConfig = STATUS_CONFIG[goal.status]
   const StatusIcon = statusConfig.icon
+  const urgency = getUrgencyBadge(goal)
+  const UrgencyIcon = urgency?.icon
   const endDate = new Date(goal.endDate)
+  const categoryObj = goal.category
+    ? categories.find((c) => c.name === goal.category)
+    : null
 
   return (
     <Card
@@ -94,25 +105,50 @@ export function GoalCard({ goal, onClick }: GoalCardProps) {
           <h3 className="font-semibold text-base leading-tight text-card-foreground line-clamp-2 text-pretty">
             {goal.title}
           </h3>
-          <Badge
-            variant="outline"
-            className={cn("shrink-0 text-xs", statusConfig.className)}
-          >
-            <StatusIcon className="mr-1 h-3 w-3" />
-            {statusConfig.label}
-          </Badge>
+          <div className="flex flex-col items-end gap-1 shrink-0">
+            <Badge
+              variant="outline"
+              className={cn("text-xs", statusConfig.className)}
+            >
+              <StatusIcon className="mr-1 h-3 w-3" />
+              {statusConfig.label}
+            </Badge>
+            {urgency && UrgencyIcon && (
+              <Badge
+                variant="outline"
+                className={cn("text-xs", urgency.className)}
+              >
+                <UrgencyIcon className="mr-1 h-3 w-3" />
+                {urgency.label}
+              </Badge>
+            )}
+          </div>
         </div>
         <div className="flex flex-wrap gap-1.5 mt-2">
           {goal.category && (
-            <Badge variant="secondary" className="text-xs">
+            <Badge
+              variant="secondary"
+              className="text-xs"
+              style={
+                categoryObj
+                  ? { backgroundColor: `${categoryObj.color}20`, color: categoryObj.color, borderColor: `${categoryObj.color}40` }
+                  : undefined
+              }
+            >
+              {categoryObj && (
+                <span
+                  className="mr-1 h-2 w-2 rounded-full inline-block"
+                  style={{ backgroundColor: categoryObj.color }}
+                />
+              )}
               {goal.category}
             </Badge>
           )}
-          {goal.tag && (
-            <Badge variant="outline" className="text-xs bg-transparent">
-              {goal.tag}
+          {goal.tags.map((tag) => (
+            <Badge key={tag} variant="outline" className="text-xs bg-transparent">
+              {tag}
             </Badge>
-          )}
+          ))}
           {goal.template && goal.template !== "free" && (
             <Badge variant="outline" className="text-xs bg-accent text-accent-foreground border-accent">
               {goal.template.toUpperCase()}

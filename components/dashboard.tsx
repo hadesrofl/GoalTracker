@@ -40,7 +40,9 @@ export function Dashboard() {
   const allTags = useMemo(() => {
     const tags = new Set<string>()
     for (const goal of goals) {
-      if (goal.tag) tags.add(goal.tag)
+      for (const t of goal.tags) {
+        tags.add(t)
+      }
     }
     return Array.from(tags).sort()
   }, [goals])
@@ -52,13 +54,13 @@ export function Dashboard() {
         const matchesSearch =
           goal.title.toLowerCase().includes(q) ||
           goal.description.toLowerCase().includes(q) ||
-          goal.tag?.toLowerCase().includes(q)
+          goal.tags.some((t) => t.toLowerCase().includes(q))
         if (!matchesSearch) return false
       }
       if (categoryFilter !== "all" && goal.category !== categoryFilter)
         return false
       if (statusFilter !== "all" && goal.status !== statusFilter) return false
-      if (tagFilter !== "all" && goal.tag !== tagFilter) return false
+      if (tagFilter !== "all" && !goal.tags.includes(tagFilter)) return false
       return true
     })
   }, [goals, search, categoryFilter, statusFilter, tagFilter])
@@ -124,7 +126,13 @@ export function Dashboard() {
                 <SelectItem value="all">All Categories</SelectItem>
                 {categories.map((cat) => (
                   <SelectItem key={cat.id} value={cat.name}>
-                    {cat.name}
+                    <span className="flex items-center gap-2">
+                      <span
+                        className="h-2.5 w-2.5 rounded-full shrink-0"
+                        style={{ backgroundColor: cat.color }}
+                      />
+                      {cat.name}
+                    </span>
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -198,7 +206,7 @@ export function Dashboard() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredGoals.map((goal) => (
-            <GoalCard key={goal.id} goal={goal} onClick={handleGoalClick} />
+            <GoalCard key={goal.id} goal={goal} categories={categories} onClick={handleGoalClick} />
           ))}
         </div>
       )}
